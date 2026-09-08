@@ -1,0 +1,16 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+artifacts/
+.env
+.env.*
+!.env.example
+secrets.yaml
+configuration.yaml
+.storage/
+*.log
+.DS_Store

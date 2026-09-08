@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="fi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Amazing Stock Card · Demo</title>
+<style>
+  :root{color-scheme:dark;--primary-text-color:#e6eaf2;--secondary-text-color:#9da9ba;--card-background-color:#222e3e;--primary-color:#b3a5fa;--success-color:#72d9ad;--error-color:#f992a7;--divider-color:#3c485b;--ha-card-border-radius:22px}
+  body{margin:0;padding:32px 16px;background:#141e2c;color:var(--primary-text-color);font:14px system-ui,sans-serif}main{max-width:760px;margin:auto}h1{font-size:22px;font-weight:550;margin:0}p{color:var(--secondary-text-color);line-height:1.6}.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:20px 0}button{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:8px;padding:10px 16px;color:inherit;cursor:pointer;font:inherit}#editor{margin-top:24px;background:var(--card-background-color);padding:20px;border-radius:16px}footer{margin:20px 0;font-size:12px;color:var(--secondary-text-color)}
+  body.light{color-scheme:light;background:#f1f3f7;--primary-text-color:#202935;--secondary-text-color:#6b7280;--card-background-color:#fff;--primary-color:#7860cb;--success-color:#278757;--error-color:#c14361;--divider-color:#e0e4ed}
+  @media(max-width:480px){body{padding:20px 10px}.intro{font-size:13px}}
+</style></head>
+<body><main><h1>Amazing Stock Card</h1><p class="intro">Käyttöliittymän demo · Kaikki hinnat ja historia ovat keksittyjä esimerkkitietoja.</p><div class="toolbar"><button id="theme">Vaihda teemaa</button><button id="edit">Muokkaa korttia</button><button id="lang">FI / EN</button></div><div id="card"></div><div id="editor" hidden></div><footer>Vain UI-kortti · Nykyiset sensorit · Home Assistantin historia</footer></main>
+<script type="module" src="./demo.js"></script></body></html>
