@@ -13,7 +13,7 @@
 | `show_sparklines` | `true` | Fetch and show weekly mini charts. The weekly percentage column remains on wide cards. |
 | `compact` | `false` | Smaller rows. |
 | `history_refresh` | `300` | Recorder fetch interval, integer seconds from 60 to 3600. Does not alter source polling. |
-| `grid_options` | HA defaults: 12 columns × 12 rows | Standard HA Sections layout options. A numeric `rows` fixes the card height; the watchlist scrolls inside it. `rows: auto` uses natural height with the list capped at 320 px. |
+| `grid_options` | HA defaults: 12 columns × 8 rows | Standard HA Sections layout options. A numeric `rows` fixes the card height; the watchlist scrolls inside it. `rows: auto` uses natural height with the list capped at 320 px. |
 
 ## Entity options
 

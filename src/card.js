@@ -17,7 +17,7 @@ const icon = name => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="
 export class AmazingStockCard extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
-    this._visible = true; this._width = 600;
+    this._visible = true; this._width = 600; this._height = 0;
     this._history = new HistoryCache(() => this._render());
     this._onVisibility = () => { if (!document.hidden) this._loadHistory(); };
     this.shadowRoot.addEventListener('click', event => this._click(event));
@@ -46,13 +46,15 @@ export class AmazingStockCard extends HTMLElement {
   _applySizing() {
     const rows = this._config?.grid_options?.rows;
     this.toggleAttribute('grid-sized', rows !== 'auto' && (this._layout === 'grid' || typeof rows === 'number'));
-    this.style.setProperty('--stock-grid-rows', String(typeof rows === 'number' ? rows : 12));
+    this.style.setProperty('--stock-grid-rows', String(typeof rows === 'number' ? rows : this.getGridOptions().rows));
   }
   connectedCallback() {
     document.addEventListener('visibilitychange', this._onVisibility);
     this._resize = new ResizeObserver(entries => {
-      const width = entries[0].contentRect.width;
-      if (width > 0 && Math.abs(width - this._width) > 1) { this._width = width; this._render(); }
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && (Math.abs(width - this._width) > 1 || Math.abs(height - this._height) > 1)) {
+        this._width = width; this._height = height; this._render();
+      }
     });
     this._resize.observe(this);
     this._intersection = new IntersectionObserver(entries => {
@@ -67,7 +69,7 @@ export class AmazingStockCard extends HTMLElement {
     document.removeEventListener('visibilitychange', this._onVisibility); this._history.clear();
   }
   getCardSize() { return Math.ceil((120 + (this._showChart ? 330 : 0) + Math.min(320, (this._config?.entities.length ?? 0) * (this._config?.compact ? 53 : 65))) / 50); }
-  getGridOptions() { return { columns: 12, min_columns: 6, rows: 12, min_rows: 4 }; }
+  getGridOptions() { return { columns: 12, min_columns: 6, rows: 8, min_rows: 4 }; }
   _startTimer() {
     clearInterval(this._timer);
     if (this.isConnected && this._config) this._timer = setInterval(() => this._loadHistory(), this._config.history_refresh * 1000);
@@ -114,7 +116,8 @@ export class AmazingStockCard extends HTMLElement {
     if (!history || history.status === 'loading') return `<div class="chart-message" role="status">${t.loading}</div>`;
     if (history.status === 'error') return `<div class="chart-message" role="status">${t.historyError}<button class="retry" data-action="retry">${t.retry}</button></div>`;
     const width = Math.max(230, this._width - (this._width <= 580 ? 50 : 60));
-    const geometry = plotGeometry(history.points, width, 178, history.start, history.end);
+    const height = this._chartHeight;
+    const geometry = plotGeometry(history.points, width, height, history.start, history.end);
     if (!geometry) return `<div class="chart-message">${t.noHistory}</div>`;
     this._geometry = { ...geometry, width, history, asset };
     const ticks = [geometry.min, (geometry.min + geometry.max) / 2, geometry.max].filter((value, i, all) => all.indexOf(value) === i);
@@ -123,10 +126,10 @@ export class AmazingStockCard extends HTMLElement {
       const date = new Date(time);
       return this._period === 'day' ? this._time(time).split(' ').at(-1) : `${date.getDate()}.${date.getMonth() + 1}.`;
     };
-    return `<svg viewBox="0 0 ${width} 178" role="img" aria-label="${e(`${asset.name}: ${t.recorded}, ${t.periodNames[this._period]}. ${t.range}: ${this._format(geometry.min, asset.decimals)}–${this._format(geometry.max, asset.decimals)} ${asset.currency}`)}">
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${e(`${asset.name}: ${t.recorded}, ${t.periodNames[this._period]}. ${t.range}: ${this._format(geometry.min, asset.decimals)}–${this._format(geometry.max, asset.decimals)} ${asset.currency}`)}">
       ${ticks.map(value => `<line class="grid" x1="4" x2="${geometry.right}" y1="${geometry.y(value)}" y2="${geometry.y(value)}"></line><text x="${width - 3}" y="${geometry.y(value) + 4}" text-anchor="end">${e(this._format(value, asset.decimals))}</text>`).join('')}
       <path class="line" d="${geometry.path}"></path><circle class="endpoint" cx="${geometry.x(last.time)}" cy="${geometry.y(last.value)}" r="3"></circle>
-      ${[0, .5, 1].map((ratio, i) => `<text x="${geometry.x(history.start + (history.end - history.start) * ratio)}" y="175" text-anchor="${['start', 'middle', 'end'][i]}">${e(formatDate(history.start + (history.end - history.start) * ratio))}</text>`).join('')}
+      ${[0, .5, 1].map((ratio, i) => `<text x="${geometry.x(history.start + (history.end - history.start) * ratio)}" y="${height - 3}" text-anchor="${['start', 'middle', 'end'][i]}">${e(formatDate(history.start + (history.end - history.start) * ratio))}</text>`).join('')}
     </svg><div class="tooltip" hidden></div>`;
   }
   _tooltip(event) {
@@ -141,6 +144,8 @@ export class AmazingStockCard extends HTMLElement {
   }
   _render() {
     if (!this._config || !this._hass) return;
+    this._chartHeight = this.hasAttribute('grid-sized') && this.clientHeight <= 600 ? 112 : 178;
+    this.style.setProperty('--stock-chart-height', `${this._chartHeight}px`);
     this._lang = language(this._hass, this._config); this._t = STRINGS[this._lang];
     const t = this._t, c = this._config;
     const assets = c.entities.map(item => normalizeEntity(this._hass, item));

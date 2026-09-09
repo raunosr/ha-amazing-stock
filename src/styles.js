@@ -7,9 +7,11 @@ export const CARD_STYLES = `
 @media(pointer:coarse){.icon-button{min-width:44px;min-height:44px}.periods button{min-width:44px;min-height:44px}}
 .icon{width:24px;height:24px;display:block}.icon-button .icon{width:20px;height:20px}.foot-time .icon{width:14px;height:14px}
 :host{min-height:0;box-sizing:border-box}ha-card{height:100%;min-height:0}.container{display:flex;flex-direction:column;height:100%;min-height:0}header,.detail,.columns,footer{flex-shrink:0}.rows{min-height:0;max-height:320px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--stock-line) transparent}.rows:focus-visible{outline:2px solid var(--stock-accent);outline-offset:-2px}
-:host([grid-sized]){height:calc(var(--row-size,var(--stock-grid-rows,12)) * (var(--row-height,var(--ha-section-grid-row-height,56px)) + var(--row-gap,var(--ha-section-grid-row-gap,8px))) - var(--row-gap,var(--ha-section-grid-row-gap,8px)));overflow:hidden}
+:host([grid-sized]){height:calc(var(--row-size,var(--stock-grid-rows,8)) * (var(--row-height,var(--ha-section-grid-row-height,56px)) + var(--row-gap,var(--ha-section-grid-row-gap,8px))) - var(--row-gap,var(--ha-section-grid-row-gap,8px)));overflow:hidden}
 :host([grid-sized]) .container{container-type:size}:host([grid-sized]) .rows{flex:1;max-height:none}
-@container(max-height:600px){.chart,.chart-bottom{display:none}.detail{padding-top:12px;padding-bottom:12px}header{padding-top:14px;padding-bottom:12px}footer{padding-top:10px;padding-bottom:10px}}
+.chart,.chart svg{height:var(--stock-chart-height,178px)}
+@container(max-height:600px){.detail{padding-top:10px;padding-bottom:10px}.price{font-size:28px}.price-line{margin-top:8px}.subtitle{display:none}header{padding-top:12px;padding-bottom:10px}footer{padding-top:8px;padding-bottom:8px}.history-note{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}}
+@container(max-height:440px){.chart,.chart-bottom{display:none}}
 @container(max-height:360px){.detail{display:none}.subtitle{display:none}footer{padding-top:8px;padding-bottom:8px}}
 @container(max-height:200px){footer{display:none}header{padding-top:8px;padding-bottom:8px}h2{font-size:16px}.columns{padding-top:4px;padding-bottom:4px}}
 `;

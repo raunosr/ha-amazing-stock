@@ -6,15 +6,36 @@ import { serve } from './serve.mjs';
 const server = await serve();
 const browser = await chromium.launch({ headless: true });
 const errors = [], external = [];
+let page;
 try {
   await mkdir('artifacts', { recursive: true });
-  const page = await browser.newPage({ viewport: { width: 1000, height: 1100 } });
+  page = await browser.newPage({ viewport: { width: 1000, height: 1100 } });
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1:')) external.push(request.url()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const card = page.locator('amazing-stock-card');
   await expect(card.locator('.asset-row')).toHaveCount(5);
   await expect(card.locator('.chart .line')).toBeVisible();
+  // HA's ha-grid-size-picker displays eight rows. An out-of-range default
+  // was clipped to 8 in its slider while the actual card still occupied 12.
+  const gridOptions = await card.evaluate(el => el.getGridOptions());
+  assert.ok(gridOptions.rows >= gridOptions.min_rows && gridOptions.rows <= 8, 'Default height must fit the HA Layout picker');
+  await page.evaluate(() => { window.demoCard.layout = 'grid'; });
+  await expect.poll(() => card.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(504);
+  await expect(card.locator('.chart .line')).toBeVisible();
+  assert.ok(await card.locator('.rows').evaluate(el => el.clientHeight >= 96), 'Default grid shows both a chart and usable list');
+  await page.screenshot({ path: 'artifacts/demo-default-grid.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.evaluate(() => { window.demoCard.style.lineHeight = '1.5'; });
+  await expect(card.locator('.chart .line')).toBeVisible();
+  await expect.poll(() => card.locator('.rows').evaluate(el => el.clientHeight), { message: 'Phone grid keeps a usable list with HA line spacing' }).toBeGreaterThanOrEqual(80);
+  await card.locator('[data-entity="sensor.technology"]').click();
+  await expect(card.locator('.detail-title')).toHaveText('iShares S&P 500 IT Sector');
+  await expect.poll(() => card.locator('.rows').evaluate(el => el.clientHeight), { message: 'Long selected names still leave one complete scrollable row' }).toBeGreaterThanOrEqual(65);
+  await page.evaluate(() => { window.demoCard.style.removeProperty('line-height'); });
+  await page.setViewportSize({ width: 1000, height: 1100 });
+  await card.locator('[data-entity="sensor.microsoft"]').click();
+  await page.evaluate(() => { window.demoCard.layout = undefined; });
   assert.equal(await page.evaluate(() => window.demoCalls.length), 1, 'Week history batched once');
   await page.screenshot({ path: 'artifacts/demo-desktop.png', fullPage: true });
   await page.evaluate(() => {
@@ -32,7 +53,7 @@ try {
   await expect(card.locator('.asset-row')).toHaveCount(30);
   await expect.poll(() => card.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(504);
   assert.equal(await card.locator('ha-card').evaluate(el => Math.round(el.getBoundingClientRect().height)), 504);
-  await expect(card.locator('.chart')).toBeHidden();
+  await expect(card.locator('.chart .line')).toBeVisible();
   const fixedHeader = await card.locator('header').boundingBox();
   const list = card.locator('.rows'); await list.hover(); await page.mouse.wheel(0, 450);
   await expect.poll(() => list.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
@@ -106,4 +127,14 @@ try {
   await expect(card.locator('.chart')).toHaveCount(0);
   assert.deepEqual(errors, [], 'No browser errors'); assert.deepEqual(external, [], 'No external network requests');
   console.log('Browser checks passed: selection, periods, history, editor, responsive themes, grid sizing, scrolling, escaping, unavailable data, retry and stale requests');
+} catch (error) {
+  if (page) {
+    await page.screenshot({ path: 'artifacts/demo-failure.png', fullPage: true });
+    console.error('Card layout at failure:', await page.locator('amazing-stock-card').evaluate(el =>
+      Object.fromEntries(['header', '.detail', '.detail-heading', '.price-line', '.chart', '.chart-bottom', '.columns', '.rows', 'footer'].map(selector => {
+        const node = el.shadowRoot.querySelector(selector);
+        return [selector, node && { width: node.clientWidth, height: node.clientHeight, font: getComputedStyle(node).font }];
+      }))));
+  }
+  throw error;
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

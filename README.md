@@ -82,15 +82,15 @@ Percentages must be percentage points (`1.25` means `+1.25%`, not `125%`). There
 
 ## Grid size and scrolling
 
-In a **Sections** dashboard, use HA's card **Layout** controls or `grid_options`. The default is 12 columns × 12 rows. The list scrolls within the available space while the heading, column labels and footer stay in place. Scroll position survives price updates and selecting instruments.
+In a **Sections** dashboard, use HA's card **Layout** controls or `grid_options`. The default is 12 columns × 8 rows, matching the HA Layout picker's visible range. The list scrolls within the available space while the heading, column labels and footer stay in place. Scroll position survives price updates and selecting instruments.
 
 ```yaml
 grid_options:
   columns: 12
-  rows: 10
+  rows: 8
 ```
 
-For heights of 600 px or less, the large graph is hidden to leave space for rows; the selected price summary remains. Below 360 px, the list gets priority over the summary. HA's grid row height and spacing theme variables are respected. In masonry layouts or with `rows: auto`, the list has a 320 px scroll area cap.
+For heights of 600 px or less, the chart becomes shorter while keeping its labels readable. At 440 px or less, the graph is hidden to leave space for rows; the selected price summary remains. Below 360 px, the list gets priority over the summary. HA's grid row height and spacing theme variables are respected. Larger explicit row counts remain supported in YAML. In masonry layouts or with `rows: auto`, the list has a 320 px scroll area cap.
 
 ## History and freshness
 

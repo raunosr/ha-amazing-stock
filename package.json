@@ -1,6 +1,6 @@
 {
   "name": "ha-amazing-stock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A provider-independent investment dashboard card for existing Home Assistant sensors",
   "type": "module",
   "private": true,
