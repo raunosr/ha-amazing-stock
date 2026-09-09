@@ -22,7 +22,7 @@ Seurantalistassa näkyvät nimi, kurssi, valuutta, päivän muutos ja leveässä
 
 Editorissa voit lisätä ja poistaa kortin rivejä, muuttaa järjestystä, nimiä ja kohteen tyyppiä sekä määrittää muiden integraatioiden attribuutit. Sensorin tilan tulee sisältää numeerinen hinta. Valuutta luetaan tavallisesti `unit_of_measurement`-attribuutista. Puuttuvia muutostietoja ei arvata.
 
-Lista on **vieritettävä**. Sections-kojelautanäkymässä kortti noudattaa HA:n Layout-asetuksia ja `grid_options`-määrityksiä, esimerkiksi `columns: 12` ja `rows: 10`. Lisääminen ei kasvata kortin korkeutta. Otsikot pysyvät paikallaan, ja vierityskohta säilyy kurssipäivityksissä. Matalassa kortissa suuri kuvaaja piilotetaan, jotta listalle jää tilaa. Masonry-näkymässä listan enimmäiskorkeus on 320 pikseliä.
+Lista on **vieritettävä**. Sections-kojelautanäkymässä kortti noudattaa HA:n Layout-asetuksia ja `grid_options`-määrityksiä. Oletus on `columns: 12` ja `rows: 8`, joten se mahtuu myös HA:n koonvalitsimeen. Lisääminen ei kasvata kortin korkeutta. Otsikot pysyvät paikallaan, ja vierityskohta säilyy kurssipäivityksissä. Kuvaaja madaltuu kortin mukana; enintään 440 pikselin korkuisessa kortissa se piilotetaan, jotta listalle jää tilaa. Masonry-näkymässä listan enimmäiskorkeus on 320 pikseliä.
 
 Kuvaajat näyttävät **Home Assistantiin tallentuneen historian**. Vuoden historiaa ei synny, jos HA säilyttää vain muutaman päivän tiedot. Kortti ilmaisee puuttuvan tai osittaisen historian ja erottaa sensorin päivitysajan lähteen mahdollisesta kurssiaikaleimasta. Avanzan datan viive pysyy lähteen mukaisena.
 
