@@ -1,4 +1,4 @@
-import { normalizeConfig, normalizeEntity, plotGeometry, escapeHtml as e } from './data.js';
+import { normalizeConfig, normalizeEntity, plotGeometry, availablePeriods, escapeHtml as e } from './data.js';
 import { HistoryCache } from './history.js';
 import { STRINGS, language } from './i18n.js';
 import { CARD_STYLES } from './styles.js';
@@ -77,10 +77,10 @@ export class AmazingStockCard extends HTMLElement {
   _loadHistory(force = false) {
     if (!this.isConnected || !this._visible || document.hidden || !this._hass || !this._config) return;
     if (this._config.show_sparklines || (this._showChart && this._period === 'week')) {
-      const ids = this._config.show_sparklines ? this._config.entities.map(item => item.entity) : [this._selected].filter(Boolean);
-      void this._history.load(this._hass, ids, 'week', this._config.history_refresh, force);
+      const items = this._config.show_sparklines ? this._config.entities : this._config.entities.filter(item => item.entity === this._selected);
+      void this._history.load(this._hass, items, 'week', this._config.history_refresh, force, this._config);
     }
-    if (this._showChart && this._selected && this._period !== 'week') void this._history.load(this._hass, [this._selected], this._period, this._config.history_refresh, force);
+    if (this._showChart && this._selected && this._period !== 'week') void this._history.load(this._hass, this._config.entities.filter(item => item.entity === this._selected), this._period, this._config.history_refresh, force, this._config);
   }
   _click(event) {
     const button = event.target.closest('button');
@@ -104,17 +104,23 @@ export class AmazingStockCard extends HTMLElement {
     try { return new Intl.DateTimeFormat(this._lang === 'fi' ? 'fi-FI' : 'en-GB', { month: 'numeric', day: 'numeric', ...(full ? { year: 'numeric' } : {}), hour: '2-digit', minute: '2-digit', ...(timeZone ? { timeZone } : {}) }).format(value); }
     catch { return new Date(value).toISOString().slice(0, 16).replace('T', ' '); }
   }
-  _meta(asset) { return [asset.symbol, this._t.kinds[asset.kind] || asset.kind, asset.market, asset.source].filter(Boolean).join(' · '); }
+  _meta(asset) { return [asset.symbol, asset.kind !== 'other' && (this._t.kinds[asset.kind] || asset.kind), asset.market, asset.source].filter(Boolean).join(' · '); }
+  _currencyMismatch(asset, history) { return Boolean(history?.instrument?.currency && asset.currency && history.instrument.currency.toUpperCase() !== asset.currency.toUpperCase()); }
+  _historyLabel(history) {
+    if (!history || history.provider === 'home_assistant') return this._t.recorded;
+    return `${history.source || 'Avanza'}${history.resolution ? ` · ${this._t.resolutions[history.resolution] || history.resolution}` : ''}`;
+  }
   _spark(asset) {
     const history = this._history.get(asset.entity, 'week');
-    const geometry = history?.status === 'ready' && plotGeometry(history.points, 54, 25, history.start, history.end, { left: 1, right: 1, top: 2, bottom: 2 });
+    const geometry = history?.status === 'ready' && !this._currencyMismatch(asset, history) && plotGeometry(history.points, 54, 25, history.start, history.end, { left: 1, right: 1, top: 2, bottom: 2 });
     return geometry ? `<svg class="spark" viewBox="0 0 54 25" aria-hidden="true"><path d="${geometry.path}"></path></svg>` : '';
   }
   _chart(asset) {
     const history = this._history.get(asset.entity, this._period), t = this._t;
     this._geometry = null;
     if (!history || history.status === 'loading') return `<div class="chart-message" role="status">${t.loading}</div>`;
-    if (history.status === 'error') return `<div class="chart-message" role="status">${t.historyError}<button class="retry" data-action="retry">${t.retry}</button></div>`;
+    if (history.status === 'error') return `<div class="chart-message" role="status">${e(t.historyErrors[history.error] || t.historyError)}<button class="retry" data-action="retry">${t.retry}</button></div>`;
+    if (this._currencyMismatch(asset, history)) return `<div class="chart-message" role="status">${t.currencyMismatch}</div>`;
     const width = Math.max(230, this._width - (this._width <= 580 ? 50 : 60));
     const height = this._chartHeight;
     const geometry = plotGeometry(history.points, width, height, history.start, history.end);
@@ -124,9 +130,9 @@ export class AmazingStockCard extends HTMLElement {
     const last = geometry.valid.at(-1);
     const formatDate = time => {
       const date = new Date(time);
-      return this._period === 'day' ? this._time(time).split(' ').at(-1) : `${date.getDate()}.${date.getMonth() + 1}.`;
+      return this._period === 'day' ? this._time(time).split(' ').at(-1) : ['year', 'five_years', 'ten_years', 'max'].includes(this._period) ? `${date.getMonth() + 1}/${date.getFullYear()}` : `${date.getDate()}.${date.getMonth() + 1}.`;
     };
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${e(`${asset.name}: ${t.recorded}, ${t.periodNames[this._period]}. ${t.range}: ${this._format(geometry.min, asset.decimals)}–${this._format(geometry.max, asset.decimals)} ${asset.currency}`)}">
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${e(`${asset.name}: ${this._historyLabel(history)}, ${t.periodNames[this._period]}. ${t.range}: ${this._format(geometry.min, asset.decimals)}–${this._format(geometry.max, asset.decimals)} ${asset.currency}`)}">
       ${ticks.map(value => `<line class="grid" x1="4" x2="${geometry.right}" y1="${geometry.y(value)}" y2="${geometry.y(value)}"></line><text x="${width - 3}" y="${geometry.y(value) + 4}" text-anchor="end">${e(this._format(value, asset.decimals))}</text>`).join('')}
       <path class="line" d="${geometry.path}"></path><circle class="endpoint" cx="${geometry.x(last.time)}" cy="${geometry.y(last.value)}" r="3"></circle>
       ${[0, .5, 1].map((ratio, i) => `<text x="${geometry.x(history.start + (history.end - history.start) * ratio)}" y="${height - 3}" text-anchor="${['start', 'middle', 'end'][i]}">${e(formatDate(history.start + (history.end - history.start) * ratio))}</text>`).join('')}
@@ -144,29 +150,50 @@ export class AmazingStockCard extends HTMLElement {
   }
   _render() {
     if (!this._config || !this._hass) return;
-    this._chartHeight = this.hasAttribute('grid-sized') && this.clientHeight <= 600 ? 112 : 178;
+    this._chartHeight = this.hasAttribute('grid-sized') && this.clientHeight <= 600 ? (this._width <= 580 ? 148 : 180) : 220;
     this.style.setProperty('--stock-chart-height', `${this._chartHeight}px`);
     this._lang = language(this._hass, this._config); this._t = STRINGS[this._lang];
     const t = this._t, c = this._config;
-    const assets = c.entities.map(item => normalizeEntity(this._hass, item));
+    const assets = c.entities.map(item => {
+      const asset = normalizeEntity(this._hass, item), instrument = this._history.instrument(item.entity);
+      if (instrument) {
+        asset.symbol ||= instrument.symbol;
+        asset.currency ||= instrument.currency;
+        asset.market ||= instrument.market;
+        if (asset.kind === 'other') asset.kind = instrument.kind || 'other';
+      }
+      return asset;
+    });
     const selected = assets.find(item => item.entity === this._selected);
+    const periods = selected ? availablePeriods(c, c.entities.find(item => item.entity === this._selected)) : [];
+    if (!periods.includes(this._period)) this._period = 'week';
     const active = this.shadowRoot.activeElement;
     const scrollTop = this.shadowRoot.querySelector('.rows')?.scrollTop ?? 0;
     const focus = active?.dataset.entity ? `[data-entity="${active.dataset.entity}"]` : active?.dataset.period ? `[data-period="${active.dataset.period}"]` : active?.dataset.action ? `[data-action="${active.dataset.action}"]` : active?.classList.contains('rows') ? '.rows' : null;
     this.toggleAttribute('compact', c.compact);
-    const change = selected?.changes[this._period];
     const history = selected && this._history.get(selected.entity, this._period);
-    const partial = history?.status === 'ready' && history.points.length && history.points[0].time > history.start + 3600000;
+    const isExternal = history && history.provider !== 'home_assistant';
+    const change = isExternal ? (history.status === 'ready' && !this._currencyMismatch(selected, history) ? history.change : null) : selected?.changes[this._period];
+    const partial = isExternal ? history.partial : history?.status === 'ready' && history.points.length && history.points[0].time > history.start + 3600000;
+    const changeText = change && (change.percent !== null || change.value !== null) ? [change.value !== null && `${this._format(change.value, selected.decimals, true)} ${selected.currency}`, change.percent !== null && `${this._format(change.percent, 2, true)} %`].filter(Boolean).join(' · ') : t.noChange;
+    const toggle = `<button class="icon-button" data-action="toggle" aria-label="${this._showChart ? t.close : t.show}" title="${this._showChart ? t.close : t.show}">${icon(this._showChart ? 'chevron-up' : 'chart-areaspline')}</button>`;
+    const headingIcon = c.icon === 'mdi:chart-line' ? icon('chart-line') : `<ha-icon icon="${e(c.icon)}"></ha-icon>`;
     this.shadowRoot.innerHTML = `<style>${CARD_STYLES}</style><ha-card><div class="container ${c.show_sparklines ? '' : 'without-sparks'}">
-      <header><span class="heading-icon">${icon('chart-line')}</span><div><h2>${e(c.title ?? t.title)}</h2><div class="subtitle">${t.watchlist}</div></div><span class="count">${assets.length} ${t.assets}</span>${!this._showChart && assets.length ? `<button class="icon-button" data-action="toggle" aria-label="${t.show}" title="${t.show}">${icon('chart-areaspline')}</button>` : ''}</header>
-      ${selected && this._showChart ? `<section class="detail" aria-label="${e(selected.name)}"><div class="detail-heading"><div><div class="detail-title">${e(selected.name)}</div><div class="meta">${e(this._meta(selected))}</div></div><div class="detail-actions"><button class="icon-button" data-action="more" aria-label="${t.more}" title="${t.more}">${icon('information-outline')}</button><button class="icon-button" data-action="toggle" aria-label="${t.close}" title="${t.close}">${icon('chevron-up')}</button></div></div>
-        <div class="price-line"><div class="price">${e(this._format(selected.price, selected.decimals))}<span class="unit">${e(selected.currency)}</span></div><div class="return ${direction(selected.available ? change.percent ?? change.value : null)}">${selected.available && (change.percent !== null || change.value !== null) ? `${e(this._format(change.value, selected.decimals, true))} ${e(selected.currency)} · ${e(this._format(change.percent, 2, true))} %` : t.noChange}<span class="return-label">${t.periodNames[this._period]}</span></div></div>
+      ${c.show_header ? `<header>${c.icon ? `<span class="heading-icon">${headingIcon}</span>` : ''}<h2>${e(c.title ?? t.title)}</h2><span class="count">${assets.length} ${t.assets}</span>${!this._showChart && assets.length ? toggle : ''}</header>` : !this._showChart && assets.length ? `<div class="list-toolbar"><span>${assets.length} ${t.assets}</span>${toggle}</div>` : ''}
+      ${selected && this._showChart ? `<section class="detail" aria-label="${e(selected.name)}"><div class="detail-heading">${selected.symbol ? `<span class="detail-symbol">${e(selected.symbol)}</span>` : ''}<div class="detail-title" title="${e(selected.name)}">${e(selected.name)}</div><div class="detail-actions"><button class="icon-button" data-action="more" aria-label="${t.more}" title="${t.more}">${icon('information-outline')}</button>${toggle}</div></div>
+        <div class="price-line"><div class="price">${e(this._format(selected.price, selected.decimals))}<span class="unit">${e(selected.currency)}</span></div><div class="return ${direction(change?.percent ?? change?.value ?? null)}">${e(changeText)}<span class="return-label">${isExternal ? t.chartChange : t.periodNames[this._period]}</span></div></div>
         ${!selected.available ? `<div class="meta" role="status">${selected.missing ? t.missing : t.unavailable}</div>` : ''}<div class="chart">${this._chart(selected)}</div>
-        <div class="chart-bottom"><div class="periods" role="group" aria-label="${t.defaultPeriod}">${Object.entries(t.periods).map(([key, label]) => `<button data-period="${key}" aria-pressed="${key === this._period}">${label}</button>`).join('')}</div><span class="history-note">${partial ? `${t.partial} · ` : ''}${t.recorded}</span></div></section>` : ''}
-      ${!assets.length ? `<div class="empty">${t.empty}</div>` : `<div class="columns" aria-hidden="true"><span>${t.asset}</span><span>${t.price}</span><span>${t.day}</span><span class="week-heading">${t.week}</span></div><div class="rows">${assets.map(asset => `<button class="asset-row" data-entity="${e(asset.entity)}" aria-pressed="${asset.entity === this._selected && this._showChart}"><span class="identity"><span class="monogram" aria-hidden="true">${e((asset.symbol || asset.name).slice(0, 3).toUpperCase())}</span><span><span class="name">${e(asset.name)}</span><span class="small">${e(this._meta(asset))}</span></span></span><span class="number"><span class="sr-only">${t.price}: </span>${e(this._format(asset.price, asset.decimals))}<span class="small">${e(asset.available ? asset.currency : asset.missing ? t.missing : t.unavailable)}</span></span><span class="day ${direction(asset.available ? asset.changes.day.percent ?? asset.changes.day.value : null)}"><span class="sr-only">${t.day}: </span>${e(this._format(asset.available ? asset.changes.day.percent : null, 2, true))} %<small>${e(this._format(asset.available ? asset.changes.day.value : null, asset.decimals, true))} ${e(asset.currency)}</small></span><span class="week ${direction(asset.available ? asset.changes.week.percent : null)}"><span class="sr-only">${t.week}: </span>${c.show_sparklines ? this._spark(asset) : ''}${e(this._format(asset.available ? asset.changes.week.percent : null, 2, true))} %</span></button>`).join('')}</div>`}
+        <div class="chart-bottom"><div class="periods" role="group" aria-label="${t.defaultPeriod}">${periods.map(key => `<button data-period="${key}" aria-pressed="${key === this._period}">${t.periods[key]}</button>`).join('')}</div><span class="history-note">${partial ? `${t.partial} · ` : ''}${e(this._historyLabel(history))}</span></div></section>` : ''}
+      ${!assets.length ? `<div class="empty">${t.empty}</div>` : `<div class="columns" aria-hidden="true"><span>${t.asset}</span><span>${t.price}</span><span>${t.day}</span><span class="week-heading">${t.week}</span></div><div class="rows">${assets.map(asset => `<button class="asset-row" data-entity="${e(asset.entity)}" aria-pressed="${asset.entity === this._selected && this._showChart}"><span class="identity"><span><span class="name" title="${e(asset.name)}">${e(asset.name)}</span>${this._meta(asset) ? `<span class="small">${e(this._meta(asset))}</span>` : ''}</span></span><span class="number"><span class="sr-only">${t.price}: </span>${e(this._format(asset.price, asset.decimals))}<span class="small">${e(asset.available ? asset.currency : asset.missing ? t.missing : t.unavailable)}</span></span><span class="day ${direction(asset.available ? asset.changes.day.percent ?? asset.changes.day.value : null)}"><span class="sr-only">${t.day}: </span>${e(this._format(asset.available ? asset.changes.day.percent : null, 2, true))} %<small>${e(this._format(asset.available ? asset.changes.day.value : null, asset.decimals, true))} ${e(asset.currency)}</small></span><span class="week ${direction(asset.available ? asset.changes.week.percent : null)}"><span class="sr-only">${t.week}: </span>${c.show_sparklines ? this._spark(asset) : ''}${e(this._format(asset.available ? asset.changes.week.percent : null, 2, true))} %</span></button>`).join('')}</div>`}
       ${selected ? `<footer><span class="foot-time">${icon('clock-outline')}${t.sensorUpdated} ${e(this._time(selected.updated))}</span><span>${selected.quoteTime ? `${t.quoteTime} ${e(this._time(selected.quoteTime))}` : t.unknownTime}${selected.delayMinutes !== null ? ` · ${t.delay} ${e(selected.delayMinutes)} ${t.minutes}` : ''}</span></footer>` : ''}
     </div></ha-card>`;
     const rows = this.shadowRoot.querySelector('.rows');
+    // Keep a usable touch-scroll area when long values wrap in a fixed HA grid.
+    if (rows && selected && this._showChart && this.hasAttribute('grid-sized') && this.clientHeight > 440 && rows.clientHeight < 80) {
+      this._chartHeight = Math.max(100, this._chartHeight - (80 - rows.clientHeight));
+      this.style.setProperty('--stock-chart-height', `${this._chartHeight}px`);
+      this.shadowRoot.querySelector('.chart').innerHTML = this._chart(selected);
+    }
     if (rows) { rows.scrollTop = scrollTop; rows.tabIndex = 0; rows.setAttribute('role', 'region'); rows.setAttribute('aria-label', t.watchlist); }
     if (focus) this.shadowRoot.querySelector(focus)?.focus({ preventScroll: true });
   }
