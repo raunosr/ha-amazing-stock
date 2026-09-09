@@ -1,5 +1,15 @@
 /** The card's data contract. No knowledge of integrations or network APIs. */
-export const PERIODS = { day: 1, week: 7, month: 30, year: 365 };
+export const PERIODS = { day: 1, week: 7, month: 30, year: 365, five_years: 1826, ten_years: 3653, max: null };
+export const RECORDER_PERIODS = ['day', 'week', 'month', 'year'];
+
+/** Provider-specific identification stays at the history boundary. */
+export function historySource(config, item) {
+  const provider = item.history_provider ?? config.history_provider ?? 'home_assistant';
+  return { provider, instrument_id: item.history_id || (provider === 'avanza' ? /^sensor\.avanza_stock_([0-9]{1,12})$/.exec(item.entity)?.[1] : undefined) };
+}
+export function availablePeriods(config, item) {
+  return historySource(config, item).provider === 'home_assistant' ? RECORDER_PERIODS : Object.keys(PERIODS);
+}
 export const ATTRIBUTE_ALIASES = {
   name: ['name', 'friendly_name'],
   symbol: ['symbol', 'ticker', 'tickerSymbol', 'shortName'],
@@ -73,15 +83,21 @@ export function normalizeConfig(input) {
     }
     if (config.decimals !== undefined && (!Number.isInteger(config.decimals) || config.decimals < 0 || config.decimals > 8)) throw new Error('decimals must be between 0 and 8.');
     if (config.delay_minutes !== undefined && (typeof config.delay_minutes !== 'number' || !Number.isFinite(config.delay_minutes) || config.delay_minutes < 0)) throw new Error('delay_minutes must be a non-negative number.');
+    if (config.history_provider !== undefined && !['home_assistant', 'avanza'].includes(config.history_provider)) throw new Error('Unknown history provider.');
+    if (config.history_id !== undefined && (typeof config.history_id !== 'string' || !/^[0-9]{1,12}$/.test(config.history_id))) throw new Error('history_id must be an Avanza instrument ID as text.');
     return config;
   });
   const period = input.default_period ?? 'week';
-  if (!Object.hasOwn(PERIODS, period)) throw new Error('default_period must be day, week, month or year.');
+  if (!Object.hasOwn(PERIODS, period)) throw new Error('Unknown default_period.');
+  if (input.history_provider !== undefined && !['home_assistant', 'avanza'].includes(input.history_provider)) throw new Error('Unknown history provider.');
   const refresh = input.history_refresh ?? 300;
   if (!Number.isInteger(refresh) || refresh < 60 || refresh > 3600) throw new Error('history_refresh must be between 60 and 3600 seconds.');
   const rows = input.grid_options?.rows;
   if (rows !== undefined && rows !== 'auto' && (!Number.isInteger(rows) || rows < 1)) throw new Error('grid_options.rows must be a positive integer or auto.');
-  return { ...input, entities, default_period: period, show_chart: input.show_chart !== false, show_sparklines: input.show_sparklines !== false, compact: input.compact === true, history_refresh: refresh };
+  if (input.title !== undefined && typeof input.title !== 'string') throw new Error('title must be text.');
+  if (input.icon !== undefined && (typeof input.icon !== 'string' || (input.icon !== '' && !/^[a-z0-9_-]+:[a-zA-Z0-9_-]+$/.test(input.icon)))) throw new Error('icon must be an icon name such as mdi:finance, or an empty string.');
+  if (input.show_header !== undefined && typeof input.show_header !== 'boolean') throw new Error('show_header must be true or false.');
+  return { ...input, entities, default_period: period, show_header: input.show_header !== false, icon: input.icon ?? 'mdi:chart-line', show_chart: input.show_chart !== false, show_sparklines: input.show_sparklines !== false, compact: input.compact === true, history_refresh: refresh };
 }
 
 const textValue = value => typeof value === 'string' || typeof value === 'number' ? String(value) : '';

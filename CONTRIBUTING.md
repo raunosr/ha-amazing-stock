@@ -1,6 +1,6 @@
 # Contributing
 
-Keep the package a provider-independent **dashboard card**. Backend integrations and data-provider credentials are out of scope. Maintain the sensor contract and document new mappings.
+Keep this package a provider-independent **dashboard card**. External market HTTP belongs in the separate [Amazing Stock Data integration](https://github.com/raunosr/ha-amazing-stock-data); the card uses its authenticated HA WebSocket contract. Keep provider credentials out of the frontend. Maintain the sensor contract and document new mappings and history adapters.
 
 Create a branch and pull request. Before submitting, run the commands in the README and rebuild the root bundle. Add focused tests for data normalization, history correctness or interactive behavior that changes. Do not check in real HA configurations, tokens, `.storage`, user entity exports, or market account information. Demo and test data must be synthetic.
 

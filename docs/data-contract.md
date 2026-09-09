@@ -7,8 +7,11 @@
 | `type` | required in dashboard | `custom:amazing-stock-card` |
 | `entities` | required | Up to 50 unique `sensor.*` IDs or entity configuration objects; an empty list opens an empty state. |
 | `title` | localized Investments | Card heading. |
+| `show_header` | `true` | Show the compact card heading. The chart can still be opened/closed when it is hidden. |
+| `icon` | `mdi:chart-line` | HA icon for the heading, e.g. `mdi:finance`; empty string hides the icon. |
 | `locale` | HA language | `fi` for Finnish; other languages use English. |
-| `default_period` | `week` | `day`, `week`, `month`, `year`. |
+| `default_period` | `week` | `day`, `week`, `month`, `year`; external history also supports `five_years`, `ten_years`, `max`. Selecting a recorder-only row resets unsupported periods to `week`. |
+| `history_provider` | `home_assistant` | `home_assistant` or `avanza`. Avanza requires Amazing Stock Data. |
 | `show_chart` | `true` | Initially show the selected asset's chart. Clicking a row opens it. |
 | `show_sparklines` | `true` | Fetch and show weekly mini charts. The weekly percentage column remains on wide cards. |
 | `compact` | `false` | Smaller rows. |
@@ -18,6 +21,8 @@
 ## Entity options
 
 `entity` is required. `name`, `symbol`, `currency`, `kind`, `market` and `source` are optional display overrides. `kind` can be `stock`, `etf`, `fund`, `index`, `etp` or `other`. `source` is a label only. `decimals` is an integer 0–8 (default 2). Optional `delay_minutes` is a non-negative number supplied by the user; it is not measured by the card.
+
+`history_provider` overrides the card's history source for one row. `history_id` is an optional digit-only string identifying the Avanza listing (1–12 digits). It takes priority over automatic detection from `sensor.avanza_stock_ID`. Match the listing and currency; matching just the company name is insufficient. External metadata fills missing symbol, currency, kind and market after history loads; explicit display values and sensor attributes take priority.
 
 `attributes` maps a semantic key to a source attribute name or a dotted nested attribute path. A literal attribute name containing a dot takes priority over a nested path. Explicit `null` disables a mapping in YAML. An omitted mapping uses the first non-null automatic alias below. Clearing an editor field restores automatic detection.
 
@@ -46,13 +51,15 @@ Quote timestamps may be ISO date strings (include a timezone), Unix seconds, or 
 
 ## Integration-independent boundary
 
-The frontend reads `hass.states` and calls only `history/history_during_period` over HA's existing authenticated WebSocket. Selecting the information button dispatches the standard `hass-more-info` event. No service calls, sensor creation, configuration writes, credentials, provider SDKs, or market HTTP requests are part of the card.
+The frontend reads `hass.states` and calls `history/history_during_period` or the optional `amazing_stock_data/history` over HA's existing authenticated WebSocket. The external request contains `entity_id`, `provider`, `instrument_id` and `period`. Selecting the information button dispatches the standard `hass-more-info` event. No service calls, sensor creation, configuration writes, credentials, provider SDKs, or market HTTP requests are part of the card.
 
 An integration can support this card by producing the above sensor contract. It does not need a plugin adapter or changes in this repository. Attribute mapping handles simple naming differences; transformations must be done by the integration or an HA template sensor.
 
 ## History semantics
 
-The card requests state-only recorder history, including the state at the start of the interval. Weekly requests batch the configured entities; other periods request only the selected entity. Cache size is bounded by 50 entities × four periods. Reloads are throttled independently of state updates. Stale in-flight responses are discarded after configuration changes or disconnection.
+The card requests state-only recorder history, including the state at the start of the interval. Weekly recorder requests batch the configured entities; other periods request only the selected entity. External requests run through a queue of at most three workers per load; the integration additionally bounds shared upstream requests. Cache size is bounded by 50 entities × seven periods. Reloads are throttled independently of state updates. Stale in-flight responses are discarded after configuration changes or disconnection.
+
+External responses contain actual sample `start`/`end`, `points: [{time,value}]` in Unix milliseconds, `instrument`, `provider`, `source`, `period`, `resolution`, `partial`, `adjustment`, `fetched_at` and first-to-last `change`. Returned provider/instrument/period identifiers must match the request. Responses are limited to 20,000 points and downsampled for rendering. The card labels external chart changes separately from sensor returns and refuses known currency mismatches. It never silently falls back to recorder when external history fails. See the companion integration for caching, source adjustment semantics and supported resolutions.
 
 Charts use timestamps, not equally spaced sample indexes. Unavailable records interrupt the line. Downsampling preserves min/max values and a gap between selected samples wherever missing records intervene; dense data may hide short valid runs, but never bridge known missing intervals. No synthetic current-price endpoint is appended. “Partial history” indicates that the returned data starts more than one hour after the requested start. The API cannot identify unrecorded outages between otherwise valid records.
 

@@ -1,4 +1,4 @@
-import { ATTRIBUTE_ALIASES, ENTITY_PATTERN, escapeHtml as e, normalizeConfig } from './data.js';
+import { ATTRIBUTE_ALIASES, ENTITY_PATTERN, RECORDER_PERIODS, escapeHtml as e, normalizeConfig } from './data.js';
 import { STRINGS, language } from './i18n.js';
 import { EDITOR_STYLES } from './styles.js';
 
@@ -32,7 +32,8 @@ export class AmazingStockCardEditor extends HTMLElement {
     if (target.dataset.map) object = object.attributes ??= {};
     let value = target.type === 'checkbox' ? target.checked : target.value.trim();
     if (target.type === 'number' && value !== '') value = Number(value);
-    if (value === '') delete object[key]; else object[key] = value;
+    if (value === '' && key !== 'icon') delete object[key]; else object[key] = value;
+    if (key === 'history_provider' && ![next.history_provider, ...next.entities.map(item => item.history_provider)].includes('avanza') && !RECORDER_PERIODS.includes(next.default_period ?? 'week')) next.default_period = 'week';
     this._emit(next);
   }
   _click(event) {
@@ -58,8 +59,13 @@ export class AmazingStockCardEditor extends HTMLElement {
     const active = this.shadowRoot.activeElement;
     const focus = active?.id;
     const field = (key, label, value, index, type = 'text') => `<label>${e(label)}<input id="field-${index ?? 'root'}-${key}" data-field="${key}" ${index === undefined ? '' : `data-index="${index}"`} type="${type}" ${type === 'number' ? 'min="0" max="8" step="1"' : ''} value="${e(value ?? '')}"></label>`;
+    const provider = (value, index) => `<label>${t.historyProvider}<select data-field="history_provider" ${index === undefined ? '' : `data-index="${index}"`}>${(index === undefined ? [] : [['', t.inherit]]).concat([['home_assistant', 'Home Assistant'], ['avanza', 'Avanza']]).map(([key, label]) => `<option value="${key}" ${(value ?? (index === undefined ? 'home_assistant' : '')) === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+    const external = c.history_provider === 'avanza' || c.entities.some(item => item.history_provider === 'avanza');
     this.shadowRoot.innerHTML = `<style>${EDITOR_STYLES}</style><h3>${t.configuration}</h3><p class="hint">${t.editorHint}</p>
-      <div class="grid">${field('title', t.title, c.title)}<label>${t.defaultPeriod}<select data-field="default_period">${Object.entries(t.periods).map(([key, label]) => `<option value="${key}" ${(c.default_period ?? 'week') === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div>
+      <div class="checks"><label class="check"><input type="checkbox" data-field="show_header" ${c.show_header !== false ? 'checked' : ''}>${t.showHeader}</label></div>
+      <div class="grid">${field('title', t.headerTitle, c.title)}${customElements.get('ha-icon-picker') ? '<ha-icon-picker id="field-root-icon"></ha-icon-picker>' : field('icon', t.headerIcon, c.icon ?? 'mdi:chart-line')}</div><p class="hint">${t.iconHint}</p>
+      ${provider(c.history_provider)}<p class="hint">${t.historyHint}</p>
+      <label>${t.defaultPeriod}<select data-field="default_period">${Object.entries(t.periods).filter(([key]) => external || RECORDER_PERIODS.includes(key)).map(([key, label]) => `<option value="${key}" ${(c.default_period ?? 'week') === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <div class="checks">${[['show_chart', t.showChart, c.show_chart !== false], ['show_sparklines', t.sparklines, c.show_sparklines !== false], ['compact', t.compact, c.compact === true]].map(([key, label, checked]) => `<label class="check"><input type="checkbox" data-field="${key}" ${checked ? 'checked' : ''}>${label}</label>`).join('')}</div>
       <datalist id="sensors">${Object.values(this._hass?.states ?? {}).filter(s => s.entity_id?.startsWith('sensor.')).sort((a, b) => a.entity_id.localeCompare(b.entity_id)).map(s => `<option value="${e(s.entity_id)}">${e(s.attributes?.friendly_name ?? s.entity_id)}</option>`).join('')}</datalist>
       ${c.entities.map((item, index) => `<section class="item"><div class="item-header"><span class="item-name">${e(item.name || this._hass?.states?.[item.entity]?.attributes?.name || this._hass?.states?.[item.entity]?.attributes?.friendly_name || item.entity)}</span><div class="actions">
@@ -67,9 +73,18 @@ export class AmazingStockCardEditor extends HTMLElement {
         <details data-detail="entity-${e(item.entity)}"><summary>${e(item.entity)}</summary><div class="grid"><label>${t.entity}<input id="field-${index}-entity" data-field="entity" data-index="${index}" list="sensors" value="${e(item.entity)}"></label>
         ${['name', 'symbol', 'currency', 'source'].map(key => field(key, t[key], item[key], index)).join('')}${field('decimals', t.precision, item.decimals, index, 'number')}
         <label>${t.kind}<select data-field="kind" data-index="${index}"><option value="">—</option>${['stock', 'etf', 'fund', 'index', 'etp', 'other'].map(key => `<option value="${key}" ${item.kind === key ? 'selected' : ''}>${t.kinds[key]}</option>`).join('')}</select></label></div>
-        <details data-detail="map-${e(item.entity)}"><summary>${t.mappings}</summary><p class="hint">${t.mappingHint}</p><div class="grid">${Object.keys(ATTRIBUTE_ALIASES).map(key => `<label>${t.mapLabels[key]}<input id="map-${index}-${key}" data-map="${key}" data-index="${index}" value="${e(item.attributes?.[key] ?? '')}" placeholder="${e(ATTRIBUTE_ALIASES[key].join(' / '))}"></label>`).join('')}</div></details></details></section>`).join('')}
+        <p class="hint">${t.symbolHint}</p><div class="grid">${provider(item.history_provider, index)}${field('history_id', t.historyId, item.history_id, index)}</div><details data-detail="map-${e(item.entity)}"><summary>${t.mappings}</summary><p class="hint">${t.mappingHint}</p><div class="grid">${Object.keys(ATTRIBUTE_ALIASES).map(key => `<label>${t.mapLabels[key]}<input id="map-${index}-${key}" data-map="${key}" data-index="${index}" value="${e(item.attributes?.[key] ?? '')}" placeholder="${e(ATTRIBUTE_ALIASES[key].join(' / '))}"></label>`).join('')}</div></details></details></section>`).join('')}
       <div class="add-row"><label>${t.entity}<input id="add-entity" list="sensors" placeholder="sensor.microsoft" autocomplete="off"></label><button data-action="add" ${c.entities.length >= 50 ? 'disabled' : ''}>+ ${t.add}</button></div>
       ${this._error ? `<p class="error" role="alert">${e(this._error)}</p>` : ''}`;
+    const picker = this.shadowRoot.querySelector('ha-icon-picker');
+    if (picker) {
+      picker.label = t.headerIcon; picker.value = c.icon ?? 'mdi:chart-line';
+      picker.addEventListener('value-changed', event => {
+        event.stopPropagation();
+        const value = event.detail?.value ?? '';
+        if (value !== (this._config.icon ?? 'mdi:chart-line')) this._emit({ ...this._config, icon: value });
+      });
+    }
     this.shadowRoot.querySelectorAll('details').forEach(el => { el.open = open.includes(el.dataset.detail); });
     if (focus) this.shadowRoot.getElementById(focus)?.focus();
   }
