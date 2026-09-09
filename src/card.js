@@ -188,11 +188,18 @@ export class AmazingStockCard extends HTMLElement {
       ${selected ? `<footer><span class="foot-time">${icon('clock-outline')}${t.sensorUpdated} ${e(this._time(selected.updated))}</span><span>${selected.quoteTime ? `${t.quoteTime} ${e(this._time(selected.quoteTime))}` : t.unknownTime}${selected.delayMinutes !== null ? ` · ${t.delay} ${e(selected.delayMinutes)} ${t.minutes}` : ''}</span></footer>` : ''}
     </div></ha-card>`;
     const rows = this.shadowRoot.querySelector('.rows');
-    // Keep a usable touch-scroll area when long values wrap in a fixed HA grid.
-    if (rows && selected && this._showChart && this.hasAttribute('grid-sized') && this.clientHeight > 440 && rows.clientHeight < 80) {
-      this._chartHeight = Math.max(100, this._chartHeight - (80 - rows.clientHeight));
-      this.style.setProperty('--stock-chart-height', `${this._chartHeight}px`);
-      this.shadowRoot.querySelector('.chart').innerHTML = this._chart(selected);
+    // HA's ha-card finishes its own render asynchronously. Measure after that
+    // layout, otherwise its temporarily zero-height children shrink the graph.
+    const chart = this.shadowRoot.querySelector('.chart');
+    if (rows && chart && selected && this.hasAttribute('grid-sized')) {
+      requestAnimationFrame(() => {
+        if (!rows.isConnected || !chart.isConnected || this.clientHeight <= 440) return;
+        if (rows.clientHeight < 80) {
+          this._chartHeight = Math.max(100, this._chartHeight - (80 - rows.clientHeight));
+          this.style.setProperty('--stock-chart-height', `${this._chartHeight}px`);
+          chart.innerHTML = this._chart(selected);
+        }
+      });
     }
     if (rows) { rows.scrollTop = scrollTop; rows.tabIndex = 0; rows.setAttribute('role', 'region'); rows.setAttribute('aria-label', t.watchlist); }
     if (focus) this.shadowRoot.querySelector(focus)?.focus({ preventScroll: true });
