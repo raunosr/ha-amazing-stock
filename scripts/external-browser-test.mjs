@@ -13,6 +13,10 @@ try {
   ]) {
     const context = await browser.newContext({ viewport: device, hasTouch: device.touch, isMobile: device.touch });
     const page = await context.newPage(), errors = [];
+    // Model HA's asynchronously initialized ha-card, not just an undefined tag.
+    await page.addInitScript(() => customElements.define('ha-card', class extends HTMLElement {
+      connectedCallback() { this.style.display = 'none'; queueMicrotask(() => { this.style.display = ''; }); }
+    }));
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     const card = page.locator('amazing-stock-card');
@@ -49,6 +53,7 @@ try {
     await expect(card.locator('.identity .small').first()).toContainText('MSFT');
     await expect.poll(() => card.locator('.rows').evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(79);
     await expect.poll(() => card.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(504);
+    if (device.name === 'desktop') await expect.poll(() => card.locator('.chart').evaluate(el => el.clientHeight)).toBe(180);
     if (device.width < 580) assert.ok(await card.locator('.detail-title').evaluate(el => el.scrollWidth > el.clientWidth), 'Long title truncates without adding another line');
     await card.scrollIntoViewIfNeeded();
     if (device.touch) {
